@@ -2,7 +2,10 @@ const fs = require("fs");
 const parser = require("@babel/parser");
 const traverse = require("@babel/traverse").default;
 const { resolve } = require("path");
+const { transformFromAst } = require("babel-core");
+const ejs = require("ejs");
 
+let id = 1;
 // asset
 function createAsset(filename) {
   // 1、获取文件内容
@@ -22,9 +25,15 @@ function createAsset(filename) {
     },
   });
 
+  const { code } = transformFromAst(ast, null, {
+    presets: ["env"],
+  });
   return {
-    source,
+    id: id++,
+    code,
     deps,
+    filename,
+    mapping: {},
   };
 }
 
@@ -37,6 +46,7 @@ function createGraph() {
     asste.deps.forEach((relativePath) => {
       const childPath = resolve("./example", relativePath);
       const child = createAsset(childPath);
+      asste.mapping[relativePath] = child.id;
       queue.push(child);
     });
   }
@@ -44,5 +54,31 @@ function createGraph() {
   return queue;
 }
 
+function build(graph) {
+  function createModules(graph) {
+    const modules = {};
+    graph.forEach((asset) => {
+      modules[asset.id] = [asset.code, asset.mapping];
+    });
+
+    return modules;
+  }
+
+  function createContext(modules) {
+    const template = fs.readFileSync("./bundle.ejs", {
+      encoding: "utf-8",
+    });
+    return ejs.render(template, { modules });
+  }
+
+  function emitFile(context) {
+    fs.writeFileSync("./example/dist/bundle.js", context);
+  }
+
+  const modules = createModules(graph);
+  console.log(modules);
+  emitFile(createContext(modules));
+}
 const graph = createGraph();
-console.log(graph);
+build(graph);
+// console.log(graph);
