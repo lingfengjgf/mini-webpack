@@ -9,9 +9,22 @@ let id = 1;
 // asset
 function createAsset(filename) {
   // 1、获取文件内容
-  const source = fs.readFileSync(filename, {
+  let source = fs.readFileSync(filename, {
     encoding: "utf-8",
   });
+
+  // 1.1 init loader
+  function initLoaders() {
+    const loaders = config.module.rules;
+    loaders.forEach((loader) => {
+      const { test, use } = loader;
+      if (test.test(filename)) {
+        source = use(source);
+      }
+    });
+  }
+
+  initLoaders();
 
   // 2、获取依赖关系 ast
   const ast = parser.parse(source, {
@@ -79,6 +92,17 @@ function build(graph) {
   console.log(modules);
   emitFile(createContext(modules));
 }
+
+function jsonLoader(source) {
+  return `export default ${source}`;
+}
+
+const config = {
+  module: {
+    rules: [{ test: /\.json$/, use: jsonLoader }],
+  },
+};
+
 const graph = createGraph();
 build(graph);
 // console.log(graph);
